@@ -1,0 +1,72 @@
+import os
+import socket
+import shutil
+
+# Налаштування
+SERVER_HOST = '127.0.0.1'
+SERVER_PORT = 5000
+BACKUP_DIR = 'backup'
+
+
+# Сервер для прийому файлів
+def server():
+    if not os.path.exists(BACKUP_DIR):
+        os.makedirs(BACKUP_DIR)
+
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as server_socket:
+        server_socket.bind((SERVER_HOST, SERVER_PORT))
+        server_socket.listen(1)
+        print(f"Сервер запущено на {SERVER_HOST}:{SERVER_PORT}")
+
+        conn, addr = server_socket.accept()
+        with conn:
+            print(f"З'єднано з {addr}")
+            while True:
+                data = conn.recv(1024).decode()
+                if not data:
+                    break
+                filename, filesize = data.split('|')
+                filesize = int(filesize)
+
+                filepath = os.path.join(BACKUP_DIR, filename)
+                with open(filepath, 'wb') as f:
+                    received = 0
+                    while received < filesize:
+                        chunk = conn.recv(min(1024, filesize - received))
+                        if not chunk:
+                            break
+                        f.write(chunk)
+                        received += len(chunk)
+                print(f"Файл {filename} отримано та збережено.")
+
+
+# Клієнт для надсилання файлів
+def client(file_path):
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as client_socket:
+        client_socket.connect((SERVER_HOST, SERVER_PORT))
+
+        filename = os.path.basename(file_path)
+        filesize = os.path.getsize(file_path)
+
+        client_socket.send(f"{filename}|{filesize}".encode())
+
+        with open(file_path, 'rb') as f:
+            while chunk := f.read(1024):
+                client_socket.send(chunk)
+
+        print(f"Файл {filename} надіслано на сервер.")
+
+
+# Запуск
+if __name__ == "__main__":
+    choice = input("Виберіть режим (server/client): ").strip().lower()
+    if choice == "server":
+        server()
+    elif choice == "client":
+        file_path = input("Введіть шлях до файлу для backup: ").strip()
+        if os.path.exists(file_path):
+            client(file_path)
+        else:
+            print("Файл не знайдено.")
+    else:
+        print("Невідомий режим.")
