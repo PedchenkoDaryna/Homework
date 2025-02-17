@@ -1,0 +1,38 @@
+import tkinter as tk
+
+def is_palindrome(s: str) -> bool:
+    """Перевіряє, чи є рядок паліндромом (без урахування регістру та пробілів)."""
+    cleaned = ''.join(ch.lower() for ch in s if ch.isalnum())
+    return cleaned == cleaned[::-1]
+
+def check_palindrome():
+    text = entry.get().strip()  # Отримуємо текст та прибираємо зайві пробіли
+    if not text:
+        result_label.config(text="Будь ласка, введіть текст!", fg="red")
+        return
+    
+    if is_palindrome(text):
+        result_label.config(text="Цей рядок є паліндромом!", fg="green")
+    else:
+        result_label.config(text="Цей рядок не є паліндромом.", fg="red")
+    
+    entry.delete(0, tk.END)  # Очищення поля введення
+
+# Головне вікно
+root = tk.Tk()
+root.title("Перевірка паліндрому")
+root.geometry("400x200")  # Фіксований розмір вікна
+
+# Поле введення
+tk.Label(root, text="Введіть рядок:").pack(pady=5)
+entry = tk.Entry(root, width=40)
+entry.pack(pady=5)
+
+# Кнопка перевірки
+tk.Button(root, text="Перевірити", command=check_palindrome).pack(pady=10)
+
+# Поле виводу результату
+result_label = tk.Label(root, text="", font=("Arial", 12))
+result_label.pack(pady=10)
+
+root.mainloop()

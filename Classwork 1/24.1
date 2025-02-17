@@ -1,0 +1,52 @@
+import tkinter as tk
+from tkinter import messagebox
+
+def compute_series():
+    try:
+        x = float(entry_x.get())
+        eps = float(entry_eps.get())
+    except ValueError:
+        messagebox.showerror("Помилка", "Введіть числові значення для x та ε.")
+        return
+
+    if abs(x) >= 1:
+        messagebox.showerror("Помилка", "Умова |x| < 1 не виконується.")
+        return
+    if eps <= 0:
+        messagebox.showerror("Помилка", "ε має бути додатнім числом.")
+        return
+
+    sum_series = 0.0
+    n = 0
+    max_iterations = 10000  # Запобіжник від нескінченних циклів
+
+    while n < max_iterations:
+        term = ((-1) ** n) * (n + 1) * (x ** n)
+        if abs(term) < eps:
+            break
+        sum_series += term
+        n += 1
+
+    result_label.config(text=f"Сума ряду: {sum_series:.6f}\nКількість доданків: {n}")
+
+# Головне вікно
+root = tk.Tk()
+root.title("Обчислення суми ряду")
+
+# Поля введення
+tk.Label(root, text="Введіть x (|x| < 1):").pack(padx=10, pady=5)
+entry_x = tk.Entry(root, width=30)
+entry_x.pack(padx=10, pady=5)
+
+tk.Label(root, text="Введіть ε:").pack(padx=10, pady=5)
+entry_eps = tk.Entry(root, width=30)
+entry_eps.pack(padx=10, pady=5)
+
+# Кнопка обчислення
+tk.Button(root, text="Обчислити", command=compute_series).pack(padx=10, pady=10)
+
+# Поле виводу результату
+result_label = tk.Label(root, text="", font=("Arial", 12))
+result_label.pack(padx=10, pady=10)
+
+root.mainloop()
