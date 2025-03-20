@@ -1,0 +1,40 @@
+import socket
+
+HOST = '127.0.0.1'  # адреса сервера
+PORT = 9000         # порт сервера
+
+def main():
+    # Імена файлів: вхідний з датами та вихідний з перетвореними датами
+    input_file = "dates.txt"
+    output_file = "converted_dates.txt"
+
+    # Зчитуємо весь вміст вхідного файлу
+    try:
+        with open(input_file, "r", encoding="utf-8") as f:
+            file_content = f.read()
+    except FileNotFoundError:
+        print(f"Файл '{input_file}' не знайдено!")
+        return
+
+    # Встановлюємо з'єднання з сервером
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.connect((HOST, PORT))
+        # Відсилаємо дані (рядки з датами) на сервер
+        s.sendall(file_content.encode('utf-8'))
+        # Завершуємо передачу, щоб сервер знав, що дані закінчилися
+        s.shutdown(socket.SHUT_WR)
+        # Збираємо відповідь від сервера
+        response = b""
+        while True:
+            data = s.recv(1024)
+            if not data:
+                break
+            response += data
+
+    # Записуємо отриману відповідь у новий файл
+    with open(output_file, "w", encoding="utf-8") as f:
+        f.write(response.decode('utf-8'))
+    print(f"Отримані рядки з перетвореними датами збережено у файлі '{output_file}'.")
+
+if name == "main":
+    main()

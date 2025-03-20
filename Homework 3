@@ -1,0 +1,107 @@
+#part1 questions.json 
+[
+    {
+        "text": "Яка столиця Франції?",
+        "options": ["Париж", "Лондон", "Берлін", "Рим"],
+        "correct": ["Париж"]
+    },
+    {
+        "text": "Скільки буде 2+2?",
+        "options": ["3", "4", "5"],
+        "correct": ["4"]
+    },
+    {
+        "text": "Які з цих чисел парні?",
+        "options": ["1", "2", "3", "4"],
+        "correct": ["2", "4"]
+    }
+]
+
+#part2 server.py
+import socket
+import threading
+import json
+import random
+import datetime
+
+# Завантаження тестових питань із файлу
+def load_questions(filename="questions.json"):
+    with open(filename, "r", encoding="utf-8") as file:
+        return json.load(file)
+
+# Запис результатів у журнал
+def log_result(client_name, score, total_questions):
+    with open("results.log", "a", encoding="utf-8") as log_file:
+        timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        log_file.write(f"{timestamp} - {client_name}: {score}/{total_questions} балів\n")
+
+# Функція для обробки клієнта
+def handle_client(client_socket, questions):
+    try:
+        client_socket.send(b"Введіть своє ім'я: ")
+        client_name = client_socket.recv(1024).decode().strip()
+
+        random.shuffle(questions)  # Перемішуємо питання для кожного клієнта
+        selected_questions = questions[:5]  # Вибираємо 5 випадкових питань
+        score = 0
+
+        for question in selected_questions:
+            question_text = f"{question['text']}\nВаріанти: {', '.join(question['options'])}\nВаша відповідь (через кому): "
+            client_socket.send(question_text.encode())
+
+            answer = client_socket.recv(1024).decode().strip().split(",")
+            answer = [a.strip() for a in answer]
+
+            if set(answer) == set(question["correct"]):
+                score += 1
+
+        result_message = f"Тест завершено. Ви набрали {score} з {len(selected_questions)} балів.\n"
+        client_socket.send(result_message.encode())
+
+        log_result(client_name, score, len(selected_questions))
+        client_socket.close()
+    except Exception as e:
+        print(f"Помилка: {e}")
+        client_socket.close()
+
+# Основна функція сервера
+def server():
+    server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    server_socket.bind(("0.0.0.0", 12345))
+    server_socket.listen(5)
+    
+    print("Сервер запущено. Очікування клієнтів...")
+
+    questions = load_questions()
+
+    while True:
+        client_socket, addr = server_socket.accept()
+        print(f"Новий клієнт: {addr}")
+        client_thread = threading.Thread(target=handle_client, args=(client_socket, questions))
+        client_thread.start()
+
+if __name__ == "__main__":
+    server()
+#part3 client.py
+import socket
+
+def client():
+    client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    client_socket.connect(("127.0.0.1", 12345))
+
+    while True:
+        message = client_socket.recv(1024).decode()
+        if not message:
+            break
+        print(message, end="")
+
+        response = input()
+        client_socket.send(response.encode())
+
+    client_socket.close()
+
+if __name__ == "__main__":
+    client()
+#part 4 results.log
+2025-03-20 15:30:12 - Олександр: 4/5 балів
+2025-03-20 15:32:45 - Марія: 3/5 балів
