@@ -1,0 +1,42 @@
+# Т26_5
+import pandas as pd
+import requests
+from io import StringIO
+
+CSV_URL = "http://opendata.rada.gov.ua/dataset/informaciya-pro-narodnyh-deputativ-ukrayiny-8-sklykannya" 
+
+def download_csv(url):
+    """Завантажує CSV-файл з мережі."""
+    response = requests.get(url)
+    if response.status_code == 200:
+        return StringIO(response.text)  # Конвертуємо у файлоподібний об'єкт
+    else:
+        raise Exception("Не вдалося завантажити файл")
+
+# Завантажуємо CSV-файл
+try:
+    csv_data = download_csv(CSV_URL)
+    df = pd.read_csv(csv_data)
+
+    # Припустимо, що у файлі є колонки: "Депутат", "Доходи"
+    df = df[['Депутат', 'Доходи']].dropna()
+
+    # Конвертуємо доходи у числовий формат
+    df['Доходи'] = df['Доходи'].str.replace(',', '').astype(float)
+
+    # Групуємо доходи по кожному депутату (сума всіх записів)
+    income_summary = df.groupby("Депутат", as_index=False)["Доходи"].sum()
+
+    # Сортуємо за доходами
+    top_5 = income_summary.nlargest(5, "Доходи")
+    bottom_5 = income_summary.nsmallest(5, "Доходи")
+
+    # Виводимо результати
+    print("Топ-5 депутатів з найбільшими доходами:")
+    print(top_5)
+
+    print("\nТоп-5 депутатів з найменшими доходами:")
+    print(bottom_5)
+
+except Exception as e:
+    print("Помилка:", e)
