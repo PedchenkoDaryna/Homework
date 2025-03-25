@@ -1,0 +1,30 @@
+from flask import Flask, request, jsonify
+app = Flask(__name__)
+@app.route('/find_sequence', methods =['GET', 'POST'])
+def find_sequence():
+    if request.method == 'POST':
+        text = request.form.get('text')
+        if not text:
+            return jsonify({'error': 'No text provided'}), 400
+        max_char = ''
+        max_count = 0
+        current_char = ''
+        current_count = 0
+        for char in text:
+            if char == current_char:
+                current_count += 1
+            else:
+                current_char = char
+                current_count = 1
+            if current_count > max_count:
+                max_count = current_count
+                max_char = current_char
+        return jsonify({'character': max_char, 'length': max_count})
+    return '''
+            <form method="post">
+                Enter text: <input type="text" name="text">
+                <input type="submit" value="Submit">
+            </form>
+        '''
+#if __name__ == 'main':
+app.run(debug=True)
