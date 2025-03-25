@@ -1,0 +1,157 @@
+from wsgiref.simple_server import make_server
+from urllib.parse import parse_qs
+import json
+import os
+
+# Файл для збереження гостей
+DATA_FILE = "guests.json"
+
+# Клас Person (базовий)
+class Person:
+    def __init__(self, first_name, last_name):
+        self.first_name = first_name
+        self.last_name = last_name
+
+# Клас ТипНомера
+class RoomType:
+    def __init__(self, type_name, price_per_day):
+        self.type_name = type_name
+        self.price_per_day = price_per_day
+
+# Клас Гість
+class Guest(Person):
+    def __init__(self, first_name, last_name, room, days):
+        super().__init__(first_name, last_name)
+        self.room = room
+        self.days = days
+
+    def calculate_price(self):
+        return self.room.price_per_day * self.days
+
+# Доступні номери
+rooms = {
+    "Standard": RoomType("Standard", 500),
+    "Deluxe": RoomType("Deluxe", 800),
+    "Suite": RoomType("Suite", 1200)
+}
+
+# Завантаження гостей із файлу
+def load_guests():
+    if not os.path.exists(DATA_FILE):
+        return []
+    with open(DATA_FILE, "r", encoding="utf-8") as f:
+        return json.load(f)
+
+# Збереження гостей у файл
+def save_guests(guests):
+    with open(DATA_FILE, "w", encoding="utf-8") as f:
+        json.dump(guests, f, ensure_ascii=False, indent=2)
+
+# Основна WSGI-функція
+def app(environ, start_response):
+    headers = [('Content-type', 'text/html; charset=utf-8')]
+    start_response('200 OK', headers)
+
+    # Парсимо GET-параметри
+    query = parse_qs(environ['QUERY_STRING'])
+    
+    # Реєстрація гостя
+    if environ["PATH_INFO"] == "/register":
+        return [register_guest(query).encode('utf-8')]
+
+    # Перегляд списку гостей
+    if environ["PATH_INFO"] == "/guests":
+        return [show_guests().encode('utf-8')]
+
+    # Головна сторінка
+    return [main_page().encode('utf-8')]
+
+# Головна сторінка
+def main_page():
+    return """
+    <html>
+    <head><title>Готель</title></head>
+    <body>
+        <h1>Готель</h1>
+        <p><a href="/register">Реєстрація гостя</a></p>
+        <p><a href="/guests">Список гостей</a></p>
+    </body>
+    </html>
+    """
+
+# Форма реєстрації
+def register_guest(query):
+    if "first_name" in query and "last_name" in query and "room" in query and "days" in query:
+        first_name = query["first_name"][0]
+        last_name = query["last_name"][0]
+        room_type = query["room"][0]
+        days = int(query["days"][0])
+
+        if room_type not in rooms:
+            return "<p>Помилка: такого номера немає.</p><a href='/register'>Назад</a>"
+
+        guest = Guest(first_name, last_name, rooms[room_type], days)
+        guests = load_guests()
+        guests.append({
+            "first_name": guest.first_name,
+            "last_name": guest.last_name,
+            "room": guest.room.type_name,
+            "days": guest.days,
+            "total_price": guest.calculate_price()
+        })
+        save_guests(guests)
+
+        return f"""
+        <p>Гість {first_name} {last_name} зареєстрований у номері {room_type} на {days} діб.</p>
+        <p>Сума до оплати: {guest.calculate_price()} грн.</p>
+        <a href="/">На головну</a>
+        """
+
+    # Виведення форми
+    return f"""
+    <html>
+    <head><title>Реєстрація гостя</title></head>
+    <body>
+        <h2>Реєстрація гостя</h2>
+        <form action="/register" method="get">
+            Ім'я: <input type="text" name="first_name"><br>
+            Прізвище: <input type="text" name="last_name"><br>
+            Тип номера:
+            <select name="room">
+                {''.join(f'<option value="{key}">{rooms[key].type_name} - {rooms[key].price_per_day} грн/доба</option>' for key in rooms)}
+            </select><br>
+            Кількість діб: <input type="number" name="days" min="1"><br>
+            <input type="submit" value="Зареєструвати">
+        </form>
+        <a href="/">На головну</a>
+    </body>
+    </html>
+    """
+
+# Список гостей
+def show_guests():
+    guests = load_guests()
+    if not guests:
+        return "<p>Немає зареєстрованих гостей.</p><a href='/'>На головну</a>"
+
+    guest_list = "".join(f"<tr><td>{g['first_name']} {g['last_name']}</td><td>{g['room']}</td><td>{g['days']}</td><td>{g['total_price']} грн</td></tr>" for g in guests)
+
+    return f"""
+    <html>
+    <head><title>Список гостей</title></head>
+    <body>
+        <h2>Список гостей</h2>
+        <table border="1">
+            <tr><th>Ім'я</th><th>Тип номера</th><th>Кількість діб</th><th>Сума</th></tr>
+            {guest_list}
+        </table>
+        <a href="/">На головну</a>
+    </body>
+    </html>
+    """
+
+# Запуск WSGI-сервера
+if __name__ == "__main__":
+    with make_server('', 8000, app) as server:
+        print("WSGI-сервер запущено на http://localhost:8000")
+        server.serve_forever()
