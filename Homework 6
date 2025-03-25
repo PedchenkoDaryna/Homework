@@ -1,0 +1,89 @@
+#Код CGI-скрипту
+#script.py
+#!/usr/bin/env python3
+import cgi
+
+print("Content-Type: text/html\n")  # HTTP-заголовок для CGI
+
+# Отримуємо дані з форми
+form = cgi.FieldStorage()
+input_text = form.getvalue("text", "")
+
+# Розділяємо цифри і решту символів, зберігаючи порядок
+digits = "".join(c for c in input_text if c.isdigit())
+others = "".join(c for c in input_text if not c.isdigit())
+
+# Виводимо результат
+print(f"""
+<html>
+<head><title>CGI Тест</title></head>
+<body>
+    <h2>Введений рядок:</h2>
+    <p>{input_text}</p>
+    <h2>Цифри:</h2>
+    <p>{digits}</p>
+    <h2>Решта символів:</h2>
+    <p>{others}</p>
+    <br>
+    <a href="/">Назад</a>
+</body>
+</html>
+""")
+#index.html
+<!DOCTYPE html>
+<html>
+<head>
+    <title>CGI Тест</title>
+</head>
+<body>
+    <h2>Введіть текст:</h2>
+    <form action="/cgi-bin/script.py" method="post">
+        <input type="text" name="text">
+        <input type="submit" value="Обробити">
+    </form>
+</body>
+</html>
+#Код WSGI-додатку
+#app.py
+from wsgiref.simple_server import make_server
+from urllib.parse import parse_qs
+
+def app(environ, start_response):
+    # Встановлюємо заголовки HTTP-відповіді
+    headers = [('Content-type', 'text/html; charset=utf-8')]
+    start_response('200 OK', headers)
+
+    # Отримуємо вхідні параметри (рядок із форми)
+    query = parse_qs(environ['QUERY_STRING'])
+    input_text = query.get("text", [""])[0]
+
+    # Розділяємо цифри і решту символів, зберігаючи порядок
+    digits = "".join(c for c in input_text if c.isdigit())
+    others = "".join(c for c in input_text if not c.isdigit())
+
+    # HTML-відповідь
+    response = f"""
+    <html>
+    <head><title>WSGI Тест</title></head>
+    <body>
+        <h2>Введіть текст:</h2>
+        <form action="/" method="get">
+            <input type="text" name="text">
+            <input type="submit" value="Обробити">
+        </form>
+        <h2>Введений рядок:</h2>
+        <p>{input_text}</p>
+        <h2>Цифри:</h2>
+        <p>{digits}</p>
+        <h2>Решта символів:</h2>
+        <p>{others}</p>
+    </body>
+    </html>
+    """
+    return [response.encode('utf-8')]
+
+# Запуск сервера
+if __name__ == "__main__":
+    with make_server('', 8000, app) as server:
+        print("WSGI-сервер запущено на http://localhost:8000")
+        server.serve_forever()
