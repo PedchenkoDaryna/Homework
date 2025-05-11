@@ -1,0 +1,42 @@
+if name == "main":
+    with make_server("localhost", 2222, application) as httpd:
+        print("=== LOCAL WSGI SERVER STARTED AT http://localhost:2222 ===")
+        httpd.serve_forever()
+# index.html
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Palindrome Checker</title>
+    <style>
+        body { font-family: Arial, sans-serif; text-align: center; padding-top: 50px; }
+        input[type="text"] { width: 300px; padding: 10px; margin: 10px 0; }
+        input[type="submit"] { padding: 10px 20px; }
+    </style>
+</head>
+<body>
+    <h1>Palindrome Checker</h1>
+    <form method="POST" action="/custom/palindrome.py">
+        <input type="text" name="palindrome" placeholder="Enter text" required>
+        <br>
+        <input type="submit" value="Check">
+    </form>
+</body>
+</html>
+
+# result.html
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Palindrome Result</title>
+</head>
+<body>
+    <h2>Result:</h2>
+    <p>$answer</p>
+    <a href="/index.html">Try again</a>
+</body>
+</html>
