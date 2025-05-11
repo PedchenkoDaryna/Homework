@@ -1,0 +1,326 @@
+# 28.1
+# a)
+#server
+import json
+import cgi
+from string import Template
+from wsgiref.simple_server import make_server
+
+def redirect(start_response, location):
+    start_response("303 SEE OTHER", [("Location", location)])
+    return [b""]
+
+class BookApp:
+    def init(self, data_file):
+        self.data_file = data_file
+        with open(data_file, encoding="utf-8") as f:
+            self.data = json.load(f)
+        self.books = self.data.get("books", [])
+
+    def save_data(self):
+        with open(self.data_file, "w", encoding="utf-8") as f:
+            json.dump({"books": self.books}, f, ensure_ascii=False, indent=2)
+
+    def add_book(self, author, title, year):
+        try:
+            year_int = int(year)
+        except ValueError:
+            year_int = 0
+        self.books.append({"author": author, "title": title, "year": year_int})
+
+    def search_books(self, author="", title="", year_from="", year_to=""):
+        result = []
+        try:
+            y_from = int(year_from) if year_from else None
+        except ValueError:
+            y_from = None
+        try:
+            y_to = int(year_to) if year_to else None
+        except ValueError:
+            y_to = None
+
+        for book in self.books:
+            if author and author.lower() not in book["author"].lower():
+                continue
+            if title and title.lower() not in book["title"].lower():
+                continue
+            if y_from and book["year"] < y_from:
+                continue
+            if y_to and book["year"] > y_to:
+                continue
+            result.append(book)
+        return result
+
+    def render_template(self, template_path, params):
+        with open(template_path, encoding="utf-8") as f:
+            template = Template(f.read())
+        return template.substitute(params)
+
+    def call(self, environ, start_response):
+        path = environ.get("PATH_INFO", "").lstrip("/")
+        method = environ.get("REQUEST_METHOD", "GET")
+        params = {"result": ""}
+        status = "200 OK"
+        headers = [("Content-Type", "text/html; charset=utf-8")]
+if path == "add_book":
+            if method == "GET":
+                html_file = "templates/add_book.html"
+                content = self.render_template(html_file, params)
+            elif method == "POST":
+                form = cgi.FieldStorage(fp=environ["wsgi.input"], environ=environ)
+                author = form.getfirst("author", "").strip()
+                title = form.getfirst("title", "").strip()
+                year = form.getfirst("year", "").strip()
+                if author and title and year:
+                    self.add_book(author, title, year)
+                    return redirect(start_response, "/search")
+                else:
+                    content = "<h2>Неповні дані. Спробуйте ще раз.</h2>"
+            else:
+                status = "405 METHOD NOT ALLOWED"
+                content = "Метод не дозволений"
+        elif path == "search":
+            if method == "GET":
+                html_file = "templates/search_books.html"
+                content = self.render_template(html_file, params)
+            elif method == "POST":
+                form = cgi.FieldStorage(fp=environ["wsgi.input"], environ=environ)
+                author = form.getfirst("author", "").strip()
+                title = form.getfirst("title", "").strip()
+                year_from = form.getfirst("year_from", "").strip()
+                year_to = form.getfirst("year_to", "").strip()
+                found = self.search_books(author, title, year_from, year_to)
+                result_html = "<h2>Знайдені книги:</h2>"
+                if found:
+                    result_html += "<ul>"
+                    for book in found:
+                        result_html += "<li>{} - {} ({})</li>".format(
+                            book["author"], book["title"], book["year"]
+                        )
+                    result_html += "</ul>"
+                else:
+                    result_html += "<p>За заданими критеріями нічого не знайдено.</p>"
+                params["result"] = result_html
+                html_file = "templates/search_books.html"
+                content = self.render_template(html_file, params)
+            else:
+                status = "405 METHOD NOT ALLOWED"
+                content = "Метод не дозволений"
+        else:
+            status = "404 NOT FOUND"
+            html_file = "templates/error_404.html"
+            content = self.render_template(html_file, params)
+
+        start_response(status, headers)
+        return [bytes(content, encoding="utf-8")]
+
+if name == 'main':
+    app = BookApp("data/books.json")
+    print("=== JSON Version: Local webserver ===")
+    make_server("", 8000, app).serve_forever()
+
+# templates/add_book.html
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+  <meta charset="UTF-8">
+  <title>Додати книгу</title>
+</head>
+<body>
+  <h1>Додати книгу</h1>
+  <form action="/add_book" method="post">
+    <label>Автор: <input type="text" name="author" required></label><br>
+    <label>Назва: <input type="text" name="title" required></label><br>
+    <label>Рік видання: <input type="text" name="year" required></label><br>
+    <input type="submit" value="Додати">
+  </form>
+  <br>
+  <a href="/search">Перейти до пошуку</a>
+</body>
+</html>
+#templates/search_books.html
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+  <meta charset="UTF-8">
+  <title>Пошук книг</title>
+</head>
+<body>
+  <h1>Пошук книг</h1>
+  <form action="/search" method="post">
+    <label>Автор: <input type="text" name="author"></label><br>
+    <label>Назва: <input type="text" name="title"></label><br>
+    <label>Рік видання від: <input type="text" name="year_from"></label><br>
+    <label>Рік видання до: <input type="text" name="year_to"></label><br>
+    <input type="submit" value="Знайти">
+  </form>
+  <br>
+  $result
+  <br>
+  <a href="/add_book">Додати книгу</a>
+</body>
+</html>
+#templates/error_404.html
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+  <meta charset="UTF-8">
+  <title>Помилка 404</title>
+</head>
+<body>
+  <h1>404 - Сторінку не знайдено</h1>
+  <a href="/add_book">На головну</a>
+</body>
+</html>
+#b)
+#server
+import xml.etree.ElementTree as ET
+import cgi
+from string import Template
+from wsgiref.simple_server import make_server
+
+def redirect(start_response, location):
+    start_response("303 SEE OTHER", [("Location", location)])
+    return [b""]
+
+class BookAppXML:
+    def init(self, data_file):
+        self.data_file = data_file
+        self.tree = ET.parse(data_file)
+        self.root = self.tree.getroot()
+        self.books_elem = self.root.find("books")
+
+    def add_book(self, author, title, year):
+        book = ET.Element("book")
+        auth_elem = ET.SubElement(book, "author")
+        auth_elem.text = author
+        title_elem = ET.SubElement(book, "title")
+        title_elem.text = title
+        year_elem = ET.SubElement(book, "year")
+        try:
+            int(year)
+            year_elem.text = year
+        except ValueError:
+            year_elem.text = "0"
+        self.books_elem.append(book)
+
+
+    def search_books(self, author="", title="", year_from="", year_to=""):
+        result = []
+        try:
+            y_from = int(year_from) if year_from else None
+        except ValueError:
+            y_from = None
+        try:
+            y_to = int(year_to) if year_to else None
+        except ValueError:
+            y_to = None
+
+        for book in self.books_elem.findall("book"):
+            b_author = book.find("author").text
+            b_title = book.find("title").text
+            try:
+                b_year = int(book.find("year").text)
+            except (ValueError, TypeError):
+                b_year = 0
+
+            if author and author.lower() not in b_author.lower():
+                continue
+            if title and title.lower() not in b_title.lower():
+                continue
+            if y_from and b_year < y_from:
+                continue
+            if y_to and b_year > y_to:
+                continue
+            result.append({
+                "author": b_author,
+                "title": b_title,
+                "year": b_year
+            })
+        return result
+
+    def render_template(self, template_path, params):
+        with open(template_path, encoding="utf-8") as f:
+            template = Template(f.read())
+        return template.substitute(params)
+
+    def call(self, environ, start_response):
+        path = environ.get("PATH_INFO", "").lstrip("/")
+        method = environ.get("REQUEST_METHOD", "GET")
+        params = {"result": ""}
+        status = "200 OK"
+        headers = [("Content-Type", "text/html; charset=utf-8")]
+if path == "add_book":
+            if method == "GET":
+                html_file = "templates/add_book.html"
+                content = self.render_template(html_file, params)
+            elif method == "POST":
+                form = cgi.FieldStorage(fp=environ["wsgi.input"], environ=environ)
+                author = form.getfirst("author", "").strip()
+                title = form.getfirst("title", "").strip()
+                year = form.getfirst("year", "").strip()
+                if author and title and year:
+                    self.add_book(author, title, year)
+                    return redirect(start_response, "/search")
+                else:
+                    content = "<h2>Неповні дані. Спробуйте ще раз.</h2>"
+            else:
+                status = "405 METHOD NOT ALLOWED"
+                content = "Метод не дозволений"
+        elif path == "search":
+            if method == "GET":
+                html_file = "templates/search_books.html"
+                content = self.render_template(html_file, params)
+            elif method == "POST":
+                form = cgi.FieldStorage(fp=environ["wsgi.input"], environ=environ)
+                author = form.getfirst("author", "").strip()
+                title = form.getfirst("title", "").strip()
+                year_from = form.getfirst("year_from", "").strip()
+                year_to = form.getfirst("year_to", "").strip()
+                found = self.search_books(author, title, year_from, year_to)
+                result_html = "<h2>Знайдені книги:</h2>"
+                if found:
+                    result_html += "<ul>"
+                    for book in found:
+                        result_html += "<li>{} - {} ({})</li>".format(
+                            book["author"], book["title"], book["year"]
+                        )
+                    result_html += "</ul>"
+                else:
+                    result_html += "<p>За заданими критеріями нічого не знайдено.</p>"
+                params["result"] = result_html
+                html_file = "templates/search_books.html"
+                content = self.render_template(html_file, params)
+            else:
+                status = "405 METHOD NOT ALLOWED"
+                content = "Метод не дозволений"
+        else:
+            status = "404 NOT FOUND"
+            html_file = "templates/error_404.html"
+            content = self.render_template(html_file, params)
+
+        start_response(status, headers)
+        return [bytes(content, encoding="utf-8")]
+
+if name == 'main':
+    app = BookAppXML("data/books.xml")
+    print("=== XML Version: Local webserver ===")
+    make_server("", 8000, app).serve_forever()
+
+#data/books.xml
+<?xml version="1.0" encoding="UTF-8"?>
+<library>
+  <books>
+    <book>
+      <author>Шевченко</author>
+      <title>Кобзар</title>
+      <year>1840</year>
+    </book>
+    <book>
+      <author>Франко</author>
+      <title>Захар Беркут</title>
+      <year>1892</year>
+    </book>
+  </books>
+</library>
+#add_book.html, search_books.html, error_404.html - ті самі
