@@ -1,0 +1,146 @@
+#27.2
+#exchange_rate_processing
+import os
+import openpyxl
+
+CURRENT_DIR = os.path.abspath(os.path.dirname(file))
+DB_NAME = "exchange_rate_processing.xlsx"
+DB_PATH = os.path.join(CURRENT_DIR, DB_NAME)
+
+CURRENCY_RATES = {}
+
+def load_exchange_rates():
+    workbook = openpyxl.load_workbook(DB_PATH)
+    sheet = workbook.active
+
+    for row in sheet.iter_rows():
+        try:
+            from_currency, to_currency, rate = row[0].value, row[1].value, float(row[2].value)
+            CURRENCY_RATES[f"{from_currency}/{to_currency}"] = rate
+        except:
+            continue
+
+def get_available_currencies():
+    return list(CURRENCY_RATES.keys())
+
+def get_conversion_rate(currency_pair: str) -> float:
+    return CURRENCY_RATES.get(currency_pair, 0.0)
+
+if name == "main":
+    load_exchange_rates()
+    print(get_available_currencies())
+
+# server
+from http.server import HTTPServer, CGIHTTPRequestHandler
+
+HOST, PORT = "localhost", 2222
+
+def run_server():
+    print(f"=== LOCAL WEBSERVER STARTED AT http://{HOST}:{PORT}/ ===")
+    with HTTPServer((HOST, PORT), CGIHTTPRequestHandler) as server:
+        server.serve_forever()
+
+if name == "main":
+    run_server()
+#currency_conversion
+import cgi
+import os
+import exchange_rate_processing as db
+from templates import get_template
+
+db.load_exchange_rates()
+
+form = cgi.FieldStorage()
+amount = float(form.getfirst("amount", "0.00"))
+currency_pair = form.getfirst("currency", "")
+
+if currency_pair and "/" in currency_pair:
+    from_currency, to_currency = currency_pair.split("/")
+    converted_amount = amount * db.get_conversion_rate(currency_pair)
+    result = f"{amount:.2f} {from_currency} -> {converted_amount:.2f} {to_currency}"
+else:
+    result = "Invalid currency pair selected."
+
+template = get_template("result.html")
+html_output = template.render(currency=db.get_available_currencies(), result=result)
+
+print("Content-Type: text/html")
+print()
+print(html_output)
+#templates
+import os
+from jinja2 import Environment, FileSystemLoader, Template
+
+CURRENT_DIR = os.path.abspath(os.path.dirname(file))
+TEMPLATE_DIR = os.path.join(CURRENT_DIR, "templates")
+
+jinja_env = Environment(loader=FileSystemLoader(TEMPLATE_DIR))
+
+def get_template(name: str) -> Template:
+    return jinja_env.get_template(name)
+# index
+import cgi
+import os
+from templates import get_template
+import exchange_rate_processing as db
+
+db.load_exchange_rates()
+
+index_template = get_template("index.html")
+
+html_content = index_template.render(currency_list=db.get_available_currencies())
+
+print("Content-Type: text/html")
+print()
+print(html_content)
+#index
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Currency Converter</title>
+</head>
+<body>
+    <h2>Currency Converter</h2>
+    <form method="POST" action="/cgi-bin/currency_conversion.py">
+        <label>Enter amount:</label>
+        <input type="number" name="amount" step="0.01" required>
+
+        <label>Select currency:</label>
+        <select name="currency">
+            {% for currency in currency_list %}
+            <option value="{{ currency }}">{{ currency }}</option>
+            {% endfor %}
+        </select>
+
+        <input type="submit" value="Convert">
+    </form>
+</body>
+</html>
+#redirect
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta http-equiv="refresh" content="0; url=http://127.0.0.1:2222/cgi-bin/index.py" />
+    <title>Currency Converter</title>
+</head>
+<body>
+</body>
+</html>
+#result
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Conversion Result</title>
+</head>
+<body>
+    <h2>Conversion Result</h2>
+    <p>{{ result }}</p>
+    <a href="/cgi-bin/index.py">Back</a>
+</body>
+</html>
