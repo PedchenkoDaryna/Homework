@@ -1,0 +1,193 @@
+#29.1
+import sqlite3
+from datetime import datetime, timedelta
+
+# Створення (або підключення до) бази даних
+conn = sqlite3.connect("birthdays.db")
+cursor = conn.cursor()
+
+# Таблиця для збереження даних
+cursor.execute('''
+    CREATE TABLE IF NOT EXISTS friends (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        surname TEXT NOT NULL,
+        birthday TEXT NOT NULL  -- формат: YYYY-MM-DD
+    )
+''')
+conn.commit()
+
+def add_friend():
+    surname = input("Введіть прізвище: ")
+    birthday = input("Введіть дату народження (РРРР-ММ-ДД): ")
+    cursor.execute("INSERT INTO friends (surname, birthday) VALUES (?, ?)", (surname, birthday))
+    conn.commit()
+    print(" Знайомого додано.")
+
+def find_birthday_by_surname():
+    surname = input("Введіть прізвище для пошуку: ")
+    cursor.execute("SELECT birthday FROM friends WHERE surname = ?", (surname,))
+    result = cursor.fetchone()
+    if result:
+        print(f" Дата народження {surname}: {result[0]}")
+    else:
+        print(" Знайомого не знайдено.")
+
+def upcoming_birthdays():
+    today = datetime.now().date()
+    next_week = today + timedelta(days=7)
+    cursor.execute("SELECT surname, birthday FROM friends")
+    for surname, bday_str in cursor.fetchall():
+        bday = datetime.strptime(bday_str, "%Y-%m-%d").date()
+        this_year_bday = bday.replace(year=today.year)
+        if today <= this_year_bday <= next_week:
+            print(f" {surname}: {this_year_bday}")
+        elif this_year_bday < today:
+            next_year_bday = bday.replace(year=today.year + 1)
+            if today <= next_year_bday <= next_week:
+                print(f" {surname}: {next_year_bday}")
+
+def main():
+    print(" Дні народження найближчим часом:")
+    upcoming_birthdays()
+    while True:
+        print("\nМеню:")
+        print("1. Додати знайомого")
+        print("2. Показати день народження за прізвищем")
+        print("3. Вийти")
+        choice = input("Ваш вибір: ")
+        if choice == '1':
+            add_friend()
+        elif choice == '2':
+            find_birthday_by_surname()
+        elif choice == '3':
+            break
+        else:
+            print(" Невірний вибір")
+
+if __name__ == "__main__":
+    main()
+    conn.close()
+
+#29.5
+import sqlite3
+
+# Підключення до бази
+conn = sqlite3.connect("supply.db")
+cur = conn.cursor()
+
+# Створення таблиць
+cur.execute('''
+    CREATE TABLE IF NOT EXISTS suppliers (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        contact TEXT
+    )
+''')
+
+cur.execute('''
+    CREATE TABLE IF NOT EXISTS products (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL
+    )
+''')
+
+cur.execute('''
+    CREATE TABLE IF NOT EXISTS supplies (
+        supplier_id INTEGER,
+        product_id INTEGER,
+        FOREIGN KEY (supplier_id) REFERENCES suppliers(id),
+        FOREIGN KEY (product_id) REFERENCES products(id)
+    )
+''')
+
+conn.commit()
+
+def add_supplier():
+    name = input("Назва постачальника: ")
+    contact = input("Контактні дані: ")
+    cur.execute("INSERT INTO suppliers (name, contact) VALUES (?, ?)", (name, contact))
+    conn.commit()
+    print(" Постачальника додано.")
+
+def add_product():
+    name = input("Назва товару: ")
+    cur.execute("INSERT INTO products (name) VALUES (?)", (name,))
+    conn.commit()
+    print(" Товар додано.")
+
+def link_supply():
+    product = input("Назва товару: ")
+    supplier = input("Назва постачальника: ")
+
+    cur.execute("SELECT id FROM products WHERE name = ?", (product,))
+    prod = cur.fetchone()
+
+    cur.execute("SELECT id FROM suppliers WHERE name = ?", (supplier,))
+    supp = cur.fetchone()
+
+    if prod and supp:
+        cur.execute("INSERT INTO supplies (supplier_id, product_id) VALUES (?, ?)", (supp[0], prod[0]))
+        conn.commit()
+        print(" Успішно прив'язано.")
+    else:
+        print(" Не знайдено товар або постачальника.")
+
+def find_suppliers_by_product():
+    product = input("Назва товару: ")
+    cur.execute('''
+        SELECT s.name, s.contact FROM suppliers s
+        JOIN supplies sp ON s.id = sp.supplier_id
+        JOIN products p ON p.id = sp.product_id
+        WHERE p.name = ?
+    ''', (product,))
+    results = cur.fetchall()
+    if results:
+        for name, contact in results:
+            print(f" Постачальник: {name}, Контакт: {contact}")
+    else:
+        print(" Постачальників не знайдено.")
+
+def find_products_by_supplier():
+    supplier = input("Назва постачальника: ")
+    cur.execute('''
+        SELECT p.name FROM products p
+        JOIN supplies sp ON p.id = sp.product_id
+        JOIN suppliers s ON s.id = sp.supplier_id
+        WHERE s.name = ?
+    ''', (supplier,))
+    results = cur.fetchall()
+    if results:
+        for (name,) in results:
+            print(f"\ Товар: {name}")
+    else:
+        print(" Товари не знайдено.")
+
+def main():
+    while True:
+        print("\nМеню:")
+        print("1. Додати постачальника")
+        print("2. Додати товар")
+        print("3. Зафіксувати, що постачальник постачає товар")
+        print("4. Пошук постачальників за товаром")
+        print("5. Пошук товарів за постачальником")
+        print("6. Вихід")
+        choice = input("Ваш вибір: ")
+
+        if choice == "1":
+            add_supplier()
+        elif choice == "2":
+            add_product()
+        elif choice == "3":
+            link_supply()
+        elif choice == "4":
+            find_suppliers_by_product()
+        elif choice == "5":
+            find_products_by_supplier()
+        elif choice == "6":
+            break
+        else:
+            print(" Невірний вибір.")
+
+if __name__ == "__main__":
+    main()
+    conn.close()
