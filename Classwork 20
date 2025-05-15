@@ -1,0 +1,24 @@
+def ln1x(x, epsilon):
+    if abs(x) >= 1:
+        raise ValueError("Ряд збігається лише при |x| < 1")
+
+    term = x  # перший доданок
+    result = 0
+    n = 1
+
+    while abs(term) > epsilon:
+        result += term
+        n += 1
+        term *= -x * (n - 1) / n  # використовуємо рекурентну формулу
+
+    return result
+
+# 🔍 Тестування
+test_values = [0.1, -0.3, 0.5, 0.9]
+epsilon = 1e-6
+
+print("Обчислення ln(1 + x) через ряд Тейлора:")
+for x in test_values:
+    approx = ln1x(x, epsilon)
+    actual = math.log(1 + x)
+    print(f"x = {x:.2f}: наближено = {approx:.8f}, math.log = {actual:.8f}, похибка = {abs(approx - actual):.2e}")
