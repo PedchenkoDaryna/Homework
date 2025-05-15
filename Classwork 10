@@ -1,0 +1,46 @@
+import sqlite3
+
+# Створення або підключення до БД
+conn = sqlite3.connect("systems.db")
+cursor = conn.cursor()
+
+# Створення таблиці, якщо її ще немає
+cursor.execute("""
+CREATE TABLE IF NOT EXISTS systems (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT UNIQUE,
+    address TEXT,
+    login TEXT,
+    password TEXT
+)
+""")
+conn.commit()
+
+# Функція для додавання нової системи
+def add_system(name, address, login, password):
+    try:
+        cursor.execute("INSERT INTO systems (name, address, login, password) VALUES (?, ?, ?, ?)",
+                       (name, address, login, password))
+        conn.commit()
+        print(f"Систему '{name}' додано.")
+    except sqlite3.IntegrityError:
+        print(f"Система з назвою '{name}' вже існує.")
+
+# Функція для пошуку системи за назвою
+def get_system_info(name):
+    cursor.execute("SELECT address, login, password FROM systems WHERE name = ?", (name,))
+    result = cursor.fetchone()
+    if result:
+        address, login, password = result
+        print(f"Адреса: {address}\nЛогін: {login}\nПароль: {password}")
+    else:
+        print(f"Систему з назвою '{name}' не знайдено.")
+
+# Приклад використання:
+if __name__ == "__main__":
+    # Додавання систем
+    add_system("Google", "https://google.com", "mylogin", "mypassword")
+    add_system("Facebook", "https://facebook.com", "admin", "123456")
+
+    # Отримання даних
+    get_system_info("Google")

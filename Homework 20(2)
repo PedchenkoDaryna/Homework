@@ -1,0 +1,58 @@
+# Базовий клас
+class Stack:
+    '''Реалізує стек на базі списку.'''
+    
+    def __init__(self):
+        '''Створити порожній стек.'''
+        self._lst = []
+
+    def is_empty(self):
+        '''Чи порожній стек?'''
+        return len(self._lst) == 0
+
+    def push(self, data):
+        '''Виштовхнути елемент у стек.'''
+        self._lst.append(data)
+
+    def pop(self):
+        '''Взяти елемент зі стеку.'''
+        if self.is_empty():
+            print('Pop: Стек порожній')
+            exit(1)
+        return self._lst.pop()
+
+
+# Похідний клас з обробкою виключень
+class SafeStack(Stack):
+    def pop(self):
+        '''Взяти елемент зі стеку з обробкою виключення.'''
+        if self.is_empty():
+            raise IndexError("Pop from empty stack")
+        return self._lst.pop()
+
+
+# Тестування
+def test_stack():
+    s = SafeStack()
+    
+    # Перевірка is_empty на порожньому стеці
+    print("Чи порожній:", s.is_empty())  # True
+
+    # Додавання елементів
+    s.push(10)
+    s.push(20)
+    print("Чи порожній після push:", s.is_empty())  # False
+
+    # Вилучення елементів
+    print("Pop:", s.pop())  # 20
+    print("Pop:", s.pop())  # 10
+
+    # Спроба взяти з порожнього стеку
+    try:
+        s.pop()
+    except IndexError as e:
+        print("Помилка:", e)
+
+
+# Виконати тест
+test_stack()

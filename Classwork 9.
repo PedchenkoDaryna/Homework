@@ -1,0 +1,308 @@
+#28.2
+#a)
+#server
+import json
+import cgi
+from string import Template
+
+OPTION = """
+      <option value="$cur">$cur</option>
+"""
+
+class ExchangeRate:
+    def init(self, data_file):
+        self.data_file = data_file
+        with open(data_file, encoding="utf-8") as f:
+            self.data = json.load(f)
+
+    def get_currencies(self):
+        return self.data["currencies"]
+
+    def get_exchange_rates(self):
+        return self.data["rates"]
+
+    def obtain_rate(self, cur1, cur2, amount):
+        if cur1 == cur2:
+            return amount
+        for rate in self.get_exchange_rates():
+            if rate["from"] == cur1 and rate["to"] == cur2:
+                return amount * rate["rate"]
+            elif rate["from"] == cur2 and rate["to"] == cur1:
+                return amount / rate["rate"]
+        return None
+
+    def call(self, environ, start_response):
+        path = environ.get("PATH_INFO", "").lstrip("/")
+        params = {"currencies": "", "result": ""}
+        status = "200 OK"
+        headers = [("Content-Type", "text/html; charset=utf-8")]
+
+        if path == "":
+            currencies_options = ""
+            for cur in self.get_currencies():
+                currencies_options += Template(OPTION).substitute(cur=cur)
+            params["currencies"] = currencies_options
+            html = "templates/currencies.html"
+
+        elif path == "exchange_rate":
+            form = cgi.FieldStorage(fp=environ["wsgi.input"], environ=environ)
+            cur1 = form.getfirst("from", "")
+            cur2 = form.getfirst("to", "")
+            amount = form.getfirst("amount", "")
+            if cur1 and cur2 and amount:
+                try:
+                    amount_float = float(amount)
+                    converted = self.obtain_rate(cur1, cur2, amount_float)
+                    if converted is None:
+                        params["result"] = "Курс не знайдено."
+                    else:
+                        params["result"] = "{} {} = {} {}".format(amount, cur1, round(converted, 2), cur2)
+                except Exception as e:
+                    params["result"] = "Помилка: " + str(e)
+                html = "templates/exchange_rate.html"
+            else:
+                status = "303 SEE OTHER"
+                headers.append(("Location", "/"))
+                html = "templates/currencies.html"
+        else:
+            status = "404 NOT FOUND"
+            html = "templates/error_404.html"
+
+        start_response(status, headers)
+        with open(html, encoding="utf-8") as f:
+            page = Template(f.read()).substitute(params)
+        return [bytes(page, encoding="utf-8")]
+
+
+if name == 'main':
+    app = ExchangeRate("data/currencies.json")
+    from wsgiref.simple_server import make_server
+
+    print("=== JSON Version: Local webserver ===")
+    make_server("", 8000, app).serve_forever()
+
+#templates/currencies.html
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+  <meta charset="UTF-8">
+  <title>Конвертація валют</title>
+</head>
+<body>
+  <h1>Конвертація валют</h1>
+  <form action="/exchange_rate" method="post">
+    <label>Виберіть валюту від:
+      <select name="from">
+        $currencies
+      </select>
+    </label>
+    <br>
+    <label>Виберіть валюту до:
+      <select name="to">
+        $currencies
+      </select>
+    </label>
+    <br>
+    <label>Введіть суму:
+      <input type="text" name="amount" required>
+    </label>
+    <br>
+    <input type="submit" value="Конвертувати">
+  </form>
+</body>
+</html>
+#templates/exchange_rate.
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+  <meta charset="UTF-8">
+  <title>Результат конвертації</title>
+</head>
+<body>
+  <h1>Результат конвертації</h1>
+  <p>$result</p>
+  <a href="/">Назад</a>
+</body>
+</html>
+#templates/error_404.html
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+  <meta charset="UTF-8">
+  <title>Помилка 404</title>
+</head>
+<body>
+  <h1>404 - Сторінку не знайдено</h1>
+  <a href="/">Назад</a>
+</body>
+</html>
+
+#b)
+#server
+import xml.etree.ElementTree as ET
+import cgi
+from string import Template
+
+OPTION = """
+      <option value="$cur">$cur</option>
+"""
+class ExchangeRate:
+    def init(self, data_file):
+        self.data_file = data_file
+        self.tree = ET.parse(data_file)
+        self.root = self.tree.getroot()
+
+    def get_currencies(self):
+        currencies_elem = self.root.find("currencies")
+        return [elem.text for elem in currencies_elem.findall("currency")]
+
+    def get_exchange_rates(self):
+        rates_elem = self.root.find("rates")
+        rates = []
+        for rate in rates_elem.findall("rate"):
+            rates.append({
+                "from": rate.find("from").text,
+                "to": rate.find("to").text,
+                "rate": float(rate.find("value").text)
+            })
+        return rates
+
+    def obtain_rate(self, cur1, cur2, amount):
+        if cur1 == cur2:
+            return amount
+        for rate in self.get_exchange_rates():
+            if rate["from"] == cur1 and rate["to"] == cur2:
+                return amount * rate["rate"]
+            elif rate["from"] == cur2 and rate["to"] == cur1:
+                return amount / rate["rate"]
+        return None
+
+    def call(self, environ, start_response):
+        path = environ.get("PATH_INFO", "").lstrip("/")
+        params = {"currencies": "", "result": ""}
+        status = "200 OK"
+        headers = [("Content-Type", "text/html; charset=utf-8")]
+
+        if path == "":
+            currencies_options = ""
+            for cur in self.get_currencies():
+                currencies_options += Template(OPTION).substitute(cur=cur)
+            params["currencies"] = currencies_options
+            html = "templates/currencies.html"
+        elif path == "exchange_rate":
+            form = cgi.FieldStorage(fp=environ["wsgi.input"], environ=environ)
+            cur1 = form.getfirst("from", "")
+            cur2 = form.getfirst("to", "")
+            amount = form.getfirst("amount", "")
+            if cur1 and cur2 and amount:
+                try:
+                    amount_float = float(amount)
+                    converted = self.obtain_rate(cur1, cur2, amount_float)
+                    if converted is None:
+                        params["result"] = "Курс не знайдено."
+                    else:
+                        params["result"] = "{} {} = {} {}".format(amount, cur1, round(converted, 2), cur2)
+                except Exception as e:
+                    params["result"] = "Помилка: " + str(e)
+                html = "templates/exchange_rate.html"
+            else:
+                status = "303 SEE OTHER"
+                headers.append(("Location", "/"))
+                html = "templates/currencies.html"
+        else:
+            status = "404 NOT FOUND"
+            html = "templates/error_404.html"
+
+        start_response(status, headers)
+        with open(html, encoding="utf-8") as f:
+            page = Template(f.read()).substitute(params)
+        return [bytes(page, encoding="utf-8")]
+
+
+if name == 'main':
+    app = ExchangeRate("data/currencies.xml")
+    from wsgiref.simple_server import make_server
+
+    print("=== XML Version: Local webserver ===")
+    make_server("", 8000, app).serve_forever()
+#data/currencies.xml
+<?xml version="1.0" encoding="UTF-8"?>
+<exchange>
+  <currencies>
+    <currency>UAH</currency>
+    <currency>USD</currency>
+    <currency>EUR</currency>
+  </currencies>
+  <rates>
+    <rate>
+      <from>UAH</from>
+      <to>USD</to>
+      <value>24.81</value>
+    </rate>
+    <rate>
+      <from>UAH</from>
+      <to>EUR</to>
+      <value>27.75</value>
+    </rate>
+    <rate>
+      <from>USD</from>
+      <to>EUR</to>
+      <value>1.12</value>
+    </rate>
+  </rates>
+</exchange>
+#templates/currencies.html
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+  <meta charset="UTF-8">
+  <title>Конвертація валют</title>
+</head>
+<body>
+  <h1>Конвертація валют</h1>
+  <form action="/exchange_rate" method="post">
+    <label>Виберіть валюту від:
+      <select name="from">
+        $currencies
+      </select>
+    </label>
+    <br>
+    <label>Виберіть валюту до:
+      <select name="to">
+        $currencies
+      </select>
+    </label>
+    <br>
+    <label>Введіть суму:
+      <input type="text" name="amount" required>
+    </label>
+    <br>
+    <input type="submit" value="Конвертувати">
+  </form>
+</body>
+</html>
+#templates/exchange_rate.html
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+  <meta charset="UTF-8">
+  <title>Результат конвертації</title>
+</head>
+<body>
+  <h1>Результат конвертації</h1>
+  <p>$result</p>
+  <a href="/">Назад</a>
+</body>
+</html>
+#templates/error_404.html
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+  <meta charset="UTF-8">
+  <title>Помилка 404</title>
+</head>
+<body>
+  <h1>404 - Сторінку не знайдено</h1>
+  <a href="/">Назад</a>
+</body>
+</html>

@@ -1,0 +1,48 @@
+import sqlite3
+from datetime import datetime, timedelta
+
+# Підключення до бази даних
+conn = sqlite3.connect("birthdays.db")
+cursor = conn.cursor()
+
+# Створення таблиці, якщо вона не існує
+cursor.execute("""
+CREATE TABLE IF NOT EXISTS friends (
+    id INTEGER PRIMARY KEY,
+    surname TEXT NOT NULL,
+    birthday TEXT NOT NULL -- у форматі YYYY-MM-DD
+)
+""")
+conn.commit()
+
+def add_friend(surname, birthday):
+    cursor.execute("INSERT INTO friends (surname, birthday) VALUES (?, ?)", (surname, birthday))
+    conn.commit()
+
+def get_birthday_by_surname(surname):
+    cursor.execute("SELECT birthday FROM friends WHERE surname = ?", (surname,))
+    result = cursor.fetchone()
+    return result[0] if result else None
+
+def upcoming_birthdays():
+    today = datetime.today()
+    seven_days = today + timedelta(days=7)
+
+    cursor.execute("SELECT surname, birthday FROM friends")
+    for surname, birthday in cursor.fetchall():
+        bdate = datetime.strptime(birthday, "%Y-%m-%d")
+        # Встановити рік на поточний
+        bdate_this_year = bdate.replace(year=today.year)
+        # Якщо день народження вже минув — дивимось наступного року
+        if bdate_this_year < today:
+            bdate_this_year = bdate_this_year.replace(year=today.year + 1)
+
+        if today <= bdate_this_year <= seven_days:
+            print(f"{surname} має день народження {bdate_this_year.strftime('%Y-%m-%d')}")
+
+# ==== Приклад використання ====
+# add_friend("Шевченко", "2000-05-03")
+# print(get_birthday_by_surname("Шевченко"))
+upcoming_birthdays()
+
+conn.close()

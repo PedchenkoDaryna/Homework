@@ -1,0 +1,43 @@
+import math
+
+def approx_sqrt_series(x, epsilon):
+    if abs(x) >= 1:
+        raise ValueError("Ряд сходиться лише для |x| < 1")
+    
+    n = 0
+    term = 1.0
+    total = term
+
+    numerator = 1.0
+    denominator = 1.0
+    sign = -1
+
+    while abs(term) >= epsilon:
+        n += 1
+        numerator *= (2 * n - 1)
+        denominator *= (2 * n)
+        term = sign * numerator / denominator * x ** n
+        total += term
+        sign *= -1
+
+    return total
+
+# Функція для точного значення
+def exact_value(x):
+    return 1 / math.sqrt(1 + x)
+
+# Тестування
+if __name__ == "__main__":
+    x_values = [-0.5, 0.3, 0.7]
+    epsilons = [1e-1, 1e-3, 1e-6]
+
+    for x in x_values:
+        for eps in epsilons:
+            approx = approx_sqrt_series(x, eps)
+            exact = exact_value(x)
+            error = abs(approx - exact)
+            print(f"x = {x}, ε = {eps}")
+            print(f"Апроксимація: {approx:.10f}")
+            print(f"Точне значення: {exact:.10f}")
+            print(f"Абсолютна похибка: {error:.2e}")
+            print("-" * 40)

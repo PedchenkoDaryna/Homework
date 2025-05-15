@@ -1,0 +1,101 @@
+#Classwork 5
+#palindrome
+
+import os
+import cgi
+from string import Template
+
+BASE_DIR = os.path.dirname(os.path.abspath(file))
+TEMPLATE_DIR = os.path.join(os.path.dirname(BASE_DIR), "templates")
+
+def is_palindrome(s: str) -> bool:
+    s = ''.join(filter(str.isalnum, s.lower()))
+    return s == s[::-1]
+
+def load_template(template_name: str) -> Template:
+    template_path = os.path.join(TEMPLATE_DIR, template_name)
+    with open(template_path, "r", encoding="utf-8") as f:
+        return Template(f.read())
+
+def main():
+    form = cgi.FieldStorage()
+    input_string = form.getfirst("palindrome", "").strip()
+
+    if not input_string:
+        result_message = "No input provided!"
+    elif is_palindrome(input_string):
+        result_message = f'"{input_string}" is a palindrome!'
+    else:
+        result_message = f'"{input_string}" is NOT a palindrome!'
+
+    template = load_template("result.html")
+    page = template.substitute(answer=result_message)
+
+    print("Content-Type: text/html")
+    print()
+    print(page)
+
+if name == "main":
+    main()
+
+#server
+
+import http.server
+import socketserver
+
+HOST, PORT = "localhost", 2222
+
+class CustomCGIHandler(http.server.CGIHTTPRequestHandler):
+    cgi_directories = ["/custom"]
+
+def run_server():
+    print(f"=== LOCAL WEBSERVER STARTED AT http://{HOST}:{PORT} ===")
+    with socketserver.TCPServer((HOST, PORT), CustomCGIHandler) as server:
+        try:
+            server.serve_forever()
+        except KeyboardInterrupt:
+            print("\n=== SERVER STOPPED ===")
+            server.server_close()
+
+if name == "main":
+    run_server()
+
+# index.html
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Palindrome Checker</title>
+    <style>
+        body { font-family: Arial, sans-serif; text-align: center; padding-top: 50px; }
+        input[type="text"] { width: 300px; padding: 10px; margin: 10px 0; }
+        input[type="submit"] { padding: 10px 20px; }
+    </style>
+</head>
+<body>
+    <h1>Palindrome Checker</h1>
+    <form method="POST" action="/custom/palindrome.py">
+        <input type="text" name="palindrome" placeholder="Enter text" required>
+        <br>
+        <input type="submit" value="Check">
+    </form>
+</body>
+</html>
+
+# result.html
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Palindrome Result</title>
+</head>
+<body>
+    <h2>Result:</h2>
+    <p>$answer</p>
+    <a href="/index.html">Try again</a>
+</body>
+</html>

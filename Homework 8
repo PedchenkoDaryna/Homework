@@ -1,0 +1,126 @@
+from flask import Flask, render_template_string, request, redirect
+import json
+import xml.etree.ElementTree as ET
+import random
+
+app = Flask(__name__)
+
+# Шлях до файлів
+TEAMS_FILE = 'teams.json'
+RESULTS_FILE = 'results.xml'
+
+# HTML-шаблон
+TEMPLATE = '''
+<!DOCTYPE html>
+<html>
+<head><title>Турнір</title></head>
+<body>
+  <h1>Поточна таблиця турніру</h1>
+  <table border="1">
+    <tr><th>Місце</th><th>Команда</th><th>Ігор</th><th>Виграші</th><th>Нічиї</th><th>Поразки</th>
+    <th>М'ячів забито</th><th>М'ячів пропущено</th><th>Очки</th></tr>
+    {% for i, row in enumerate(standings, 1) %}
+    <tr>
+      <td>{{ i }}</td><td>{{ row['name'] }}</td><td>{{ row['games'] }}</td>
+      <td>{{ row['wins'] }}</td><td>{{ row['draws'] }}</td><td>{{ row['losses'] }}</td>
+      <td>{{ row['goals_for'] }}</td><td>{{ row['goals_against'] }}</td><td>{{ row['points'] }}</td>
+    </tr>
+    {% endfor %}
+  </table>
+
+  <h2>Додати результат матчу</h2>
+  <form method="POST" action="/add">
+    Команда1: <input name="team1" type="number" required><br>
+    Команда2: <input name="team2" type="number" required><br>
+    Голи1: <input name="score1" type="number" required><br>
+    Голи2: <input name="score2" type="number" required><br>
+    <input type="submit" value="Додати">
+  </form>
+</body>
+</html>
+'''
+
+def load_teams():
+    with open(TEAMS_FILE, encoding='utf-8') as f:
+        return json.load(f)
+
+def load_results():
+    tree = ET.parse(RESULTS_FILE)
+    root = tree.getroot()
+    matches = []
+    for match in root.findall('match'):
+        matches.append({
+            'team1': int(match.attrib['team1']),
+            'team2': int(match.attrib['team2']),
+            'score1': int(match.attrib['score1']),
+            'score2': int(match.attrib['score2'])
+        })
+    return matches
+
+def save_result(team1, team2, score1, score2):
+    tree = ET.parse(RESULTS_FILE)
+    root = tree.getroot()
+    ET.SubElement(root, 'match', {
+        'team1': str(team1), 'team2': str(team2),
+        'score1': str(score1), 'score2': str(score2)
+    })
+    tree.write(RESULTS_FILE)
+
+def compute_standings(teams, results):
+    stats = [
+        {'name': name, 'games': 0, 'wins': 0, 'draws': 0, 'losses': 0,
+         'goals_for': 0, 'goals_against': 0, 'points': 0}
+        for name in teams
+    ]
+    for match in results:
+        t1, t2 = match['team1'], match['team2']
+        s1, s2 = match['score1'], match['score2']
+        stats[t1]['games'] += 1
+        stats[t2]['games'] += 1
+        stats[t1]['goals_for'] += s1
+        stats[t1]['goals_against'] += s2
+        stats[t2]['goals_for'] += s2
+        stats[t2]['goals_against'] += s1
+        if s1 > s2:
+            stats[t1]['wins'] += 1
+            stats[t1]['points'] += 3
+            stats[t2]['losses'] += 1
+        elif s1 < s2:
+            stats[t2]['wins'] += 1
+            stats[t2]['points'] += 3
+            stats[t1]['losses'] += 1
+        else:
+            stats[t1]['draws'] += 1
+            stats[t2]['draws'] += 1
+            stats[t1]['points'] += 1
+            stats[t2]['points'] += 1
+
+    def sort_key(team):
+        return (
+            -team['points'],
+            -(team['goals_for'] - team['goals_against']),
+            -team['goals_for'],
+            random.random()
+        )
+
+    stats.sort(key=sort_key)
+    return stats
+
+@app.route('/')
+def index():
+    teams = load_teams()
+    results = load_results()
+    standings = compute_standings(teams, results)
+    return render_template_string(TEMPLATE, standings=standings)
+
+@app.route('/add', methods=['POST'])
+def add_match():
+    team1 = int(request.form['team1'])
+    team2 = int(request.form['team2'])
+    score1 = int(request.form['score1'])
+    score2 = int(request.form['score2'])
+    save_result(team1, team2, score1, score2)
+    return redirect('/')
+
+if __name__ == '__main__':
+    app.run(debug=True)

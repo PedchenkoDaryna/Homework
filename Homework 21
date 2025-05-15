@@ -1,0 +1,53 @@
+# Основна програма
+from flask import Flask, request, jsonify
+
+app = Flask(__name__)
+
+@app.route('/unique_words', methods=['POST'])
+def get_unique_words():
+    data = request.get_json()
+    if not data or 'text' not in data:
+        return jsonify({'error': 'No text provided'}), 400
+
+    words = data['text'].split()
+    unique_words = list(set(words))
+    return jsonify({'unique_words': unique_words})
+
+if __name__ == '__main__':
+    app.run(debug=True)
+# Тестова програма
+import unittest
+from unittest.mock import patch
+from app import app
+
+class TestUniqueWordsAPI(unittest.TestCase):
+
+    def setUp(self):
+        self.client = app.test_client()
+
+    @patch('app.request')
+    def test_unique_words(self, mock_request):
+        # Удаваний вхідний JSON
+        mock_request.get_json.return_value = {
+            'text': 'hello world hello again world'
+        }
+
+        response = self.client.post('/unique_words', json={'text': 'hello world hello again world'})
+        self.assertEqual(response.status_code, 200)
+
+        json_data = response.get_json()
+        expected = {'unique_words': ['hello', 'world', 'again']}
+
+        # Перевірка, що виведені унікальні слова (незалежно від порядку)
+        self.assertCountEqual(json_data['unique_words'], expected['unique_words'])
+
+    def test_no_input(self):
+        response = self.client.post('/unique_words', json={})
+        self.assertEqual(response.status_code, 400)
+
+if __name__ == '__main__':
+    unittest.main()
+# json
+{ 
+  "unique_words": ["hello", "world", "again"]
+}

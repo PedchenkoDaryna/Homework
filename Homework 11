@@ -1,0 +1,125 @@
+Структура проєкту:
+book_web_app/
+├── app.py
+├── books.db   ← створиться автоматично
+└── templates/
+    ├── add_book.html
+    └── search_books.html
+ 1. app.py — головний Flask застосунок:
+from flask import Flask, render_template, request, redirect
+import sqlite3
+
+app = Flask(__name__)
+
+# Створення БД (один раз)
+def init_db():
+    with sqlite3.connect("books.db") as conn:
+        conn.execute('''
+            CREATE TABLE IF NOT EXISTS books (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                author TEXT NOT NULL,
+                title TEXT NOT NULL,
+                year INTEGER NOT NULL
+            )
+        ''')
+
+@app.route('/')
+def home():
+    return redirect('/add')
+
+@app.route('/add', methods=['GET', 'POST'])
+def add_book():
+    if request.method == 'POST':
+        author = request.form['author']
+        title = request.form['title']
+        year = int(request.form['year'])
+
+        with sqlite3.connect("books.db") as conn:
+            conn.execute("INSERT INTO books (author, title, year) VALUES (?, ?, ?)", (author, title, year))
+        return redirect('/add')
+
+    return render_template('add_book.html')
+
+@app.route('/search', methods=['GET', 'POST'])
+def search_books():
+    books = []
+    if request.method == 'POST':
+        author = request.form['author']
+        title = request.form['title']
+        year_from = request.form['year_from']
+        year_to = request.form['year_to']
+
+        query = "SELECT * FROM books WHERE 1=1"
+        params = []
+
+        if author:
+            query += " AND author LIKE ?"
+            params.append(f"%{author}%")
+        if title:
+            query += " AND title LIKE ?"
+            params.append(f"%{title}%")
+        if year_from:
+            query += " AND year >= ?"
+            params.append(int(year_from))
+        if year_to:
+            query += " AND year <= ?"
+            params.append(int(year_to))
+
+        with sqlite3.connect("books.db") as conn:
+            cur = conn.execute(query, params)
+            books = cur.fetchall()
+
+    return render_template('search_books.html', books=books)
+
+if __name__ == '__main__':
+    init_db()
+    app.run(debug=True)
+2. templates/add_book.html
+<!doctype html>
+<html lang="uk">
+<head>
+    <meta charset="UTF-8">
+    <title>Додати книгу</title>
+</head>
+<body>
+    <h2>Додати книгу</h2>
+    <form method="post">
+        <label>Автор: <input type="text" name="author" required></label><br><br>
+        <label>Назва: <input type="text" name="title" required></label><br><br>
+        <label>Рік видання: <input type="number" name="year" required></label><br><br>
+        <input type="submit" value="Додати">
+    </form>
+    <br>
+    <a href="/search">🔍 Перейти до пошуку книг</a>
+</body>
+</html>
+3. templates/search_books.html
+<!doctype html>
+<html lang="uk">
+<head>
+    <meta charset="UTF-8">
+    <title>Пошук книг</title>
+</head>
+<body>
+    <h2>Пошук книг</h2>
+    <form method="post">
+        <label>Автор: <input type="text" name="author"></label><br><br>
+        <label>Назва: <input type="text" name="title"></label><br><br>
+        <label>Рік видання від: <input type="number" name="year_from"></label><br><br>
+        <label>до: <input type="number" name="year_to"></label><br><br>
+        <input type="submit" value="Пошук">
+    </form>
+
+    {% if books %}
+        <h3>Результати:</h3>
+        <ul>
+            {% for book in books %}
+                <li>{{ book[1] }} — "{{ book[2] }}", {{ book[3] }} р.</li>
+            {% endfor %}
+        </ul>
+    {% endif %}
+
+    <br>
+    <a href="/add">📚 Додати нову книгу</a>
+</body>
+</html>
