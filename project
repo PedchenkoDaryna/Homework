@@ -1,0 +1,356 @@
+import tkinter as tk
+from tkinter import simpledialog, messagebox, colorchooser
+from tkinter import ttk
+import random
+import os
+
+DEFAULT_ROOMS = {
+    "Кухня": (300, 250),
+    "Вітальня": (400, 300),
+    "Спальня": (350, 280),
+    "Ванна": (200, 180),
+    "Коридор": (250, 150),
+    "Кабінет": (300, 220)
+}
+
+ROOM_TEMPLATES = {
+    "Кухня": ["Плита", "Холодильник", "Обідній стіл", "Стілець"],
+    "Вітальня": ["Диван", "Тумба під ТВ", "Кавовий столик"],
+    "Спальня": ["Ліжко", "Шафа", "Стіл"],
+    "Ванна": ["Шафа"],
+    "Коридор": ["Шафа"],
+    "Кабінет": ["Письмовий стіл", "Крісло", "Книжкова полиця"]
+}
+
+STANDARD_FURNITURE = {
+    "Стіл": (100, 60),
+    "Крісло": (60, 60),
+    "Шафа": (120, 50),
+    "Ліжко": (180, 80),
+    "Диван": (160, 70),
+    "Кавовий столик": (80, 40),
+    "Комод": (100, 50),
+    "Письмовий стіл": (120, 60),
+    "Книжкова полиця": (80, 30),
+    "Тумба під ТВ": (140, 50),
+    "Холодильник": (70, 70),
+    "Плита": (60, 60),
+    "Обідній стіл": (160, 90),
+    "Стілець": (45, 45),
+}
+
+DECORATIVE_FURNITURE = {
+    "Квітка у горщику": (30, 30),
+    "Картина": (60, 5),
+    "Настільна лампа": (20, 20),
+    "Килим": (150, 100),
+    "Декоративна статуетка": (25, 25),
+}
+
+HANDLE_SIZE = 10
+
+def random_color():
+    return "#{:06x}".format(random.randint(0x444444, 0xFFFFFF))
+
+class Room:
+    def __init__(self, name, width, height, x, y, angle=0, color=None):
+        self.name = name
+        self.width = width
+        self.height = height
+        self.x = x
+        self.y = y
+        self.angle = angle
+        self.color = color if color else random_color()
+        self.furniture = []
+
+    def rotated_size(self):
+        return (self.height, self.width) if self.angle % 180 else (self.width, self.height)
+
+class Furniture:
+    def __init__(self, name, width, height, x, y, angle=0, color=None):
+        self.name = name
+        self.width = width
+        self.height = height
+        self.x = x
+        self.y = y
+        self.angle = angle
+        self.color = color if color else "gray"
+
+    def rotated_size(self):
+        return (self.height, self.width) if self.angle % 180 else (self.width, self.height)
+
+class RoomEditor:
+    def __init__(self, root):
+        self.root = root
+        self.root.title("Редактор кімнат з меблями")
+
+        style = ttk.Style()
+        style.theme_use('clam')
+        style.configure("TButton", font=('Segoe UI', 10), padding=5)
+        style.configure("TLabel", font=('Segoe UI', 10, 'bold'))
+        style.configure("TMenubutton", font=('Segoe UI', 10), padding=4)
+
+        main_frame = tk.Frame(root)
+        main_frame.pack(fill=tk.BOTH, expand=True)
+
+        control_frame = tk.Frame(main_frame, bg='#f8f9fa', bd=2, relief=tk.GROOVE)
+        control_frame.pack(side=tk.LEFT, fill=tk.Y, padx=5, pady=5)
+
+        self.canvas = tk.Canvas(main_frame, width=1000, height=700, bg='white')
+        self.canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+
+        self.rooms = []
+        self.active_room = None
+        self.active_object = None
+        self.resizing = False
+
+        self.canvas.bind("<Button-1>", self.on_click)
+        self.canvas.bind("<B1-Motion>", self.on_drag)
+        self.canvas.bind("<ButtonRelease-1>", self.on_release)
+        self.root.bind("<Delete>", self.delete_active)
+        self.root.bind("r", self.rotate_active)
+        self.root.bind("<Key-plus>", self.increase_room_size)
+        self.root.bind("<Key-minus>", self.decrease_room_size)
+        self.root.bind("<space>", self.rotate_furniture)
+
+        ttk.Label(control_frame, text="Кімнати").pack(anchor='w', pady=(10, 0), padx=5)
+        self.room_type_var = tk.StringVar(value="Кухня")
+        ttk.OptionMenu(control_frame, self.room_type_var, self.room_type_var.get(), *DEFAULT_ROOMS.keys()).pack(padx=5, pady=3, fill=tk.X)
+        ttk.Button(control_frame, text="Додати кімнату", command=self.add_room).pack(padx=5, pady=3, fill=tk.X)
+
+        self.room_var = tk.StringVar()
+        self.room_menu = ttk.OptionMenu(control_frame, self.room_var, "")
+        self.room_menu.config(width=20)
+        self.room_menu.pack(padx=5, pady=3, fill=tk.X)
+
+        ttk.Label(control_frame, text="Основні меблі").pack(anchor='w', pady=(10, 0), padx=5)
+        self.furniture_var = tk.StringVar(value="Стіл")
+        ttk.OptionMenu(control_frame, self.furniture_var, self.furniture_var.get(), *STANDARD_FURNITURE.keys()).pack(padx=5, pady=3, fill=tk.X)
+        ttk.Button(control_frame, text="Додати меблі", command=self.add_furniture).pack(padx=5, pady=3, fill=tk.X)
+
+        ttk.Label(control_frame, text="Декор").pack(anchor='w', pady=(10, 0), padx=5)
+        self.decor_var = tk.StringVar(value="Килим")
+        ttk.OptionMenu(control_frame, self.decor_var, self.decor_var.get(), *DECORATIVE_FURNITURE.keys()).pack(padx=5, pady=3, fill=tk.X)
+        ttk.Button(control_frame, text="Додати декор", command=self.add_decor).pack(padx=5, pady=3, fill=tk.X)
+
+        ttk.Label(control_frame, text="Інструменти").pack(anchor='w', pady=(10, 0), padx=5)
+        ttk.Button(control_frame, text="Змінити колір кімнати", command=self.change_room_color).pack(padx=5, pady=3, fill=tk.X)
+        ttk.Button(control_frame, text="Змінити колір меблів", command=self.change_furniture_color).pack(padx=5, pady=3, fill=tk.X)
+        ttk.Button(control_frame, text="Обернути (R)", command=self.rotate_active).pack(padx=5, pady=3, fill=tk.X)
+        ttk.Button(control_frame, text="Видалити (Del)", command=self.delete_active).pack(padx=5, pady=3, fill=tk.X)
+
+    # інші методи залишаються такими ж...
+    # встав їх сюди з попереднього коду без змін
+
+    def add_room(self):
+        name = self.room_type_var.get()
+        if not name:
+            return
+        width, height = DEFAULT_ROOMS.get(name, (300, 200))
+        width = simpledialog.askinteger("Ширина кімнати", f"Ширина для '{name}':", initialvalue=width, minvalue=100, maxvalue=1000)
+        height = simpledialog.askinteger("Висота кімнати", f"Висота для '{name}':", initialvalue=height, minvalue=100, maxvalue=1000)
+        if not width or not height:
+            return
+        room = Room(name, width, height, x=50, y=50)
+        if self.check_overlap(room):
+            messagebox.showwarning("Конфлікт", "Перетин з іншими кімнатами")
+            return
+        self.rooms.append(room)
+        self.update_room_menu()
+
+        if name in ROOM_TEMPLATES:
+            for fname in ROOM_TEMPLATES[name]:
+                fw, fh = STANDARD_FURNITURE[fname]
+                for offset_y in range(0, height - fh, 10):
+                    for offset_x in range(0, width - fw, 10):
+                        x = room.x + offset_x
+                        y = room.y + offset_y
+                        f = Furniture(fname, fw, fh, x, y)
+                        if not self.check_overlap_furniture(f, room):
+                            room.furniture.append(f)
+                            break
+                    else:
+                        continue
+                    break
+        self.draw()
+
+    def update_room_menu(self):
+        menu = self.room_menu["menu"]
+        menu.delete(0, "end")
+        for room in self.rooms:
+            menu.add_command(label=room.name, command=lambda r=room: self.set_active_room(r))
+        if self.rooms:
+            self.set_active_room(self.rooms[-1])
+
+    def set_active_room(self, room):
+        self.active_room = room
+        self.room_var.set(room.name)
+        self.draw()
+
+    def add_furniture(self):
+        self._add_object(self.furniture_var.get(), STANDARD_FURNITURE)
+
+    def add_decor(self):
+        self._add_object(self.decor_var.get(), DECORATIVE_FURNITURE, default_color="lightgray")
+
+    def _add_object(self, name, source_dict, default_color=None):
+        if not self.active_room:
+            messagebox.showinfo("Увага", "Оберіть кімнату")
+            return
+        w, h = source_dict[name]
+        rx, ry = self.active_room.x, self.active_room.y
+        rw, rh = self.active_room.rotated_size()
+
+        for offset_y in range(0, rh - h, 10):
+            for offset_x in range(0, rw - w, 10):
+                x = rx + offset_x
+                y = ry + offset_y
+                f = Furniture(name, w, h, x, y, color=default_color)
+                if not self.check_overlap_furniture(f, self.active_room):
+                    self.active_room.furniture.append(f)
+                    self.draw()
+                    return
+        messagebox.showwarning("Немає місця", f"Недостатньо місця для: {name}")
+
+    def change_room_color(self):
+        if not self.active_room:
+            return
+        color = colorchooser.askcolor(title="Колір кімнати")[1]
+        if color:
+            self.active_room.color = color
+            self.draw()
+
+    def change_furniture_color(self):
+        if isinstance(self.active_object, Furniture):
+            color = colorchooser.askcolor(title="Колір меблів")[1]
+            if color:
+                self.active_object.color = color
+                self.draw()
+
+    def increase_room_size(self, event=None):
+        if self.active_room:
+            self.active_room.width += 20
+            self.active_room.height += 20
+            self.draw()
+
+    def decrease_room_size(self, event=None):
+        if self.active_room:
+            self.active_room.width = max(50, self.active_room.width - 20)
+            self.active_room.height = max(50, self.active_room.height - 20)
+            self.draw()
+
+    def rotate_furniture(self, event=None):
+        if isinstance(self.active_object, Furniture):
+            self.active_object.angle = (self.active_object.angle + 90) % 360
+            self.draw()
+
+    def draw(self):
+        self.canvas.delete("all")
+        for room in self.rooms:
+            rw, rh = room.rotated_size()
+            x1, y1 = room.x, room.y
+            x2, y2 = x1 + rw, y1 + rh
+            self.canvas.create_rectangle(x1, y1, x2, y2, fill=room.color, outline='red' if room == self.active_room else 'black', width=2)
+            self.canvas.create_text((x1 + x2) / 2, y1 + 10, text=room.name)
+            for f in room.furniture:
+                fw, fh = f.rotated_size()
+                fx1, fy1 = f.x, f.y
+                fx2, fy2 = fx1 + fw, fy1 + fh
+                self.canvas.create_rectangle(fx1, fy1, fx2, fy2, fill=f.color)
+                self.canvas.create_text((fx1 + fx2) / 2, (fy1 + fy2) / 2, text=f.name)
+
+    def on_click(self, event):
+        self.resizing = False
+        self.active_object = None
+        for room in reversed(self.rooms):
+            rw, rh = room.rotated_size()
+            if room.x <= event.x <= room.x + rw and room.y <= event.y <= room.y + rh:
+                self.active_room = room
+                self.offset_x = event.x - room.x
+                self.offset_y = event.y - room.y
+                self.active_object = room
+                for f in reversed(room.furniture):
+                    fw, fh = f.rotated_size()
+                    if f.x <= event.x <= f.x + fw and f.y <= event.y <= f.y + fh:
+                        self.offset_x = event.x - f.x
+                        self.offset_y = event.y - f.y
+                        self.active_object = f
+                        return
+                return
+
+    def on_drag(self, event):
+        if not self.active_object:
+            return
+        obj = self.active_object
+        new_x = event.x - self.offset_x
+        new_y = event.y - self.offset_y
+        if isinstance(obj, Room):
+            dx = new_x - obj.x
+            dy = new_y - obj.y
+            if not self.check_overlap(Room(obj.name, obj.width, obj.height, new_x, new_y), exclude=obj):
+                obj.x = new_x
+                obj.y = new_y
+                for f in obj.furniture:
+                    f.x += dx
+                    f.y += dy
+        elif isinstance(obj, Furniture):
+            old_x, old_y = obj.x, obj.y
+            obj.x = new_x
+            obj.y = new_y
+            if self.check_outside_room(obj, self.active_room) or self.check_overlap_furniture(obj, self.active_room, exclude=obj):
+                obj.x, obj.y = old_x, old_y
+        self.draw()
+
+    def on_release(self, event):
+        self.resizing = False
+
+    def delete_active(self, event=None):
+        if isinstance(self.active_object, Furniture):
+            for room in self.rooms:
+                if self.active_object in room.furniture:
+                    room.furniture.remove(self.active_object)
+        elif isinstance(self.active_object, Room):
+            self.rooms.remove(self.active_object)
+        self.active_object = None
+        self.draw()
+
+    def rotate_active(self, event=None):
+        if self.active_object:
+            self.active_object.angle = (self.active_object.angle + 90) % 360
+            self.draw()
+
+    def check_overlap(self, room, exclude=None):
+        x1, y1 = room.x, room.y
+        w1, h1 = room.rotated_size()
+        for other in self.rooms:
+            if other == exclude:
+                continue
+            x2, y2 = other.x, other.y
+            w2, h2 = other.rotated_size()
+            if not (x1 + w1 <= x2 or x1 >= x2 + w2 or y1 + h1 <= y2 or y1 >= y2 + h2):
+                return True
+        return False
+
+    def check_overlap_furniture(self, f, room, exclude=None):
+        fx, fy = f.x, f.y
+        fw, fh = f.rotated_size()
+        for other in room.furniture:
+            if other == exclude:
+                continue
+            ox, oy = other.x, other.y
+            ow, oh = other.rotated_size()
+            if not (fx + fw <= ox or fx >= ox + ow or fy + fh <= oy or fy >= oy + oh):
+                return True
+        return False
+
+    def check_outside_room(self, f, room):
+        fx, fy = f.x, f.y
+        fw, fh = f.rotated_size()
+        rx, ry = room.x, room.y
+        rw, rh = room.rotated_size()
+        return not (rx <= fx <= rx + rw - fw and ry <= fy <= ry + rh - fh)
+
+if __name__ == "__main__":
+    root = tk.Tk()
+    app = RoomEditor(root)
+    root.mainloop()
